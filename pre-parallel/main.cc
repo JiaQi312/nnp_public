@@ -10,6 +10,7 @@
 #include "config.h"
 #include "loader.h"
 #include "nnp.h"
+#include <cuda_runtime.h>
 
 /* Command definitions for command line options */
 #define TRAIN 1
@@ -42,25 +43,27 @@ int usage(){
  * Returns:
  *   void	
 */
-void train(){
-	load_dataset();
-	MODEL model;
+void train(MODEL* model, float* train_data, float* train_label){
+
+	load_dataset_train(train_data, train_label);
+	printf("good here!\n");
 	time_t t=time(NULL);
-	train_model(&model);
+	train_model(model, train_data, train_label);
 	t=time(NULL)-t;
-	save_model(&model);
+	save_model(model);
 	printf("Trained model in %ld seconds\n",t);
+
 }
 /* predict_test: load dataset, load model, predict on test set
  * Returns:
  *   void	
 */
-void predict_test(){
-	load_dataset();
+void predict_test(float* test_data, float* test_label){
+	load_dataset_predict(test_data, test_label);
 	MODEL model;
 	load_model(&model);
 	for (int i=0;i<NUM_TEST;i++){
-		predict(test_data[i],&model); 
+		predict(test_data, i, &model); 
 	}
 }
 
@@ -72,17 +75,49 @@ void predict_test(){
  *   0 on success, usage information on invalid input
 */
 int main(int argc,char** argv){
+
+	// make model, training data, and testing data accessible by both cpu and gpu
+	MODEL* model;
+	float* train_data;
+	float* train_label;
+	float* test_data;
+	float* test_label;
+	cudaMallocManaged(&model, sizeof(MODEL));
+	cudaError_t err = cudaMallocManaged(&model, sizeof(MODEL));
+	if (err != cudaSuccess) {
+    	printf("CUDA error: %s\n", cudaGetErrorString(err));
+    	return -1;
+	}
+
+	cudaMallocManaged(&train_data, sizeof(float)*NUM_TRAIN*SIZE);
+	cudaMallocManaged(&train_label, sizeof(float)*NUM_TRAIN*CLASSES);
+	cudaMallocManaged(&test_data, sizeof(float)*NUM_TEST*SIZE);
+	cudaMallocManaged(&test_label, sizeof(float)*NUM_TEST*CLASSES);
+
+	//initialize arrays to 0
+	for (int i = 0; i < NUM_TRAIN*SIZE; i++) {train_data[i] = 0.0f;}
+	for (int i = 0; i < NUM_TRAIN*CLASSES; i++) {train_label[i] = 0.0f;}
+	for (int i = 0; i < NUM_TEST*SIZE; i++) {test_data[i] = 0.0f;}
+	for (int i = 0; i < NUM_TEST*CLASSES; i++) {test_label[i] = 0.0f;}
+
 	switch (parseCmd(argc,argv)){
 		case TRAIN:{
-			train();
+			train(model, train_data, train_label);
 	      		break;
 		}
 		case PREDICT:{
-			predict_test();
+			predict_test(train_data, train_label);
 			break;
 		}
 		default:{
 		        return usage();
 		}
 	}
+
+	// free cudaManaged model
+    cudaFree(model);
+	cudaFree(train_data);
+	cudaFree(train_label);
+	cudaFree(test_data);
+	cudaFree(test_label);
 }

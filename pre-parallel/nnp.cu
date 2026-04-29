@@ -23,6 +23,13 @@
 #include "nnp.h"
 #include "kernels.h"
 
+void softmax_nnp(float *z, float *out, int len) {
+    float max = z[0];
+    for (int i=1;i<len;i++) if (z[i]>max) max=z[i];
+    float sum=0;
+    for (int i=0;i<len;i++){ out[i]=expf(z[i]-max); sum+=out[i]; }
+    for (int i=0;i<len;i++) out[i]/=sum;
+}
 
 /* Activation functions for relu layers
 * Arguments:
@@ -30,7 +37,7 @@
 * Returns:
 *   activated value based on ReLU function 
 */
-float relu(float x) { return x > 0 ? x : 0; }
+float relu_nnp(float x) { return x > 0 ? x : 0; }
 
 /* Derivative of ReLU activation function
 * Arguments:
@@ -38,21 +45,7 @@ float relu(float x) { return x > 0 ? x : 0; }
 * Returns:
 *   derivative value
 */
-float drelu(float y) { return y > 0 ? 1 : 0; }
-
-/* Softmax activation function
-* Arguments:
-*   z: input array
-*   out: output array to store softmax results
-*   len: length of the input/output arrays
-*/ 
-void softmax(float *z, float *out, int len) {
-    float max = z[0];
-    for (int i=1;i<len;i++) if (z[i]>max) max=z[i];
-    float sum=0;
-    for (int i=0;i<len;i++){ out[i]=expf(z[i]-max); sum+=out[i]; }
-    for (int i=0;i<len;i++) out[i]/=sum;
-}
+float drelu_nnp(float y) { return y > 0 ? 1 : 0; }
 
 /* Initialize weights with small random values
 * Arguments:
@@ -70,75 +63,31 @@ void init_weights(float *w, int size) {
 * Returns:
 *   None
 */
-void train_model(MODEL* model){
+void train_model(MODEL* model, float* train_data, float* train_label){
     init_weights(model->W1, SIZE*H1); init_weights(model->b1, H1);
     init_weights(model->W2, H1*H2); init_weights(model->b2, H2);
     init_weights(model->W3, H2*CLASSES); init_weights(model->b3, CLASSES);
 
+    float *loss_array;
+    float loss_sum;
+    cudaMallocManaged(&loss_array, sizeof(float) * 59); // 59 = # of blocks
+
     for (int epoch=0; epoch<EPOCHS; epoch++) {
-        float loss=0;
-        for (int n=0; n<NUM_TRAIN; n++) {
-            // ---------- Forward ----------
-            float h1[H1], h1a[H1];
-            for (int j=0;j<H1;j++){
-                h1[j]=model->b1[j];
-                for (int i=0;i<SIZE;i++) h1[j]+=train_data[n][i]*model->W1[i*H1+j];
-                h1a[j]=relu(h1[j]);
-            }
-            float h2[H2], h2a[H2];
-            for (int j=0;j<H2;j++){
-                h2[j]=model->b2[j];
-                for (int i=0;i<H1;i++) h2[j]+=h1a[i]*model->W2[i*H2+j];
-                h2a[j]=relu(h2[j]);
-            }
-            float out[CLASSES], outa[CLASSES];
-            for (int k=0;k<CLASSES;k++){
-                out[k]=model->b3[k];
-                for (int j=0;j<H2;j++) out[k]+=h2a[j]*model->W3[j*CLASSES+k];
-            }
-            softmax(out,outa,CLASSES);
+        loss_sum = 0; // loss_array stays accross epoch, so the sum needs to zero out each time
 
-            // ---------- Loss ----------
-            for (int k=0;k<CLASSES;k++)
-                loss -= train_label[n][k]*logf(outa[k]+1e-8f);
+        // call the parallel training function
+        train_model_parallel<<<59, 1024>>>(model, train_data, train_label, loss_array);
+        cudaDeviceSynchronize();
 
-            // ---------- Backprop ----------
-            float delta3[CLASSES];
-            for (int k=0;k<CLASSES;k++)
-                delta3[k] = train_label[n][k]-outa[k];
-
-            float delta2[H2];
-            for (int j=0;j<H2;j++){
-                float err=0;
-                for (int k=0;k<CLASSES;k++) err+=delta3[k]*model->W3[j*CLASSES+k];
-                delta2[j]=err*drelu(h2a[j]);
-            }
-
-            float delta1[H1];
-            for (int j=0;j<H1;j++){
-                float err=0;
-                for (int k=0;k<H2;k++) err+=delta2[k]*model->W2[j*H2+k];
-                delta1[j]=err*drelu(h1a[j]);
-            }
-
-            // ---------- Update ----------
-            for (int j=0;j<H2;j++)
-                for (int k=0;k<CLASSES;k++)
-                    model->W3[j*CLASSES+k]+=LR*delta3[k]*h2a[j];
-            for (int k=0;k<CLASSES;k++) model->b3[k]+=LR*delta3[k];
-
-            for (int j=0;j<H1;j++)
-                for (int k=0;k<H2;k++)
-                    model->W2[j*H2+k]+=LR*delta2[k]*h1a[j];
-            for (int k=0;k<H2;k++) model->b2[k]+=LR*delta2[k];
-
-            for (int i=0;i<SIZE;i++)
-                for (int j=0;j<H1;j++)
-                    model->W1[i*H1+j]+=LR*delta1[j]*train_data[n][i];
-            for (int j=0;j<H1;j++) model->b1[j]+=LR*delta1[j];
+        //get the total loss for the print
+        for (int i = 0; i < 59; i++) {
+            loss_sum += loss_array[i];
         }
-        printf("Epoch %d, Loss=%.4f\n", epoch, loss/NUM_TRAIN);
+
+        printf("Epoch %d, Loss=%.4f\n", epoch, loss_sum/NUM_TRAIN);
     }
+
+    cudaFree(loss_array);
 }
 
 /* Save the trained model to a binary file
@@ -182,14 +131,14 @@ void load_model(MODEL* model){
 * Returns:
 *   None (prints predicted class and confidence)
 */
-void predict(float *x, MODEL* model){
+void predict(float *x, int row, MODEL* model){
     float h1[H1], h1a[H1], h2[H2], h2a[H2], out[CLASSES], outa[CLASSES];
 
     // forward pass
-    for (int j=0;j<H1;j++){ h1[j]=model->b1[j]; for(int i=0;i<SIZE;i++) h1[j]+=x[i]*model->W1[i*H1+j]; h1a[j]=relu(h1[j]); }
-    for (int j=0;j<H2;j++){ h2[j]=model->b2[j]; for(int i=0;i<H1;i++) h2[j]+=h1a[i]*model->W2[i*H2+j]; h2a[j]=relu(h2[j]); }
+    for (int j=0;j<H1;j++){ h1[j]=model->b1[j]; for(int i=0;i<SIZE;i++) h1[j]+=x[row * SIZE + i]*model->W1[i*H1+j]; h1a[j]=relu_nnp(h1[j]); }
+    for (int j=0;j<H2;j++){ h2[j]=model->b2[j]; for(int i=0;i<H1;i++) h2[j]+=h1a[i]*model->W2[i*H2+j]; h2a[j]=relu_nnp(h2[j]); }
     for (int k=0;k<CLASSES;k++){ out[k]=model->b3[k]; for(int j=0;j<H2;j++) out[k]+=h2a[j]*model->W3[j*CLASSES+k]; }
-    softmax(out,outa,CLASSES);
+    softmax_nnp(out,outa,CLASSES);
 
     // print predicted class
     int pred=0; float max=outa[0];

@@ -7,15 +7,12 @@
 #ifndef LOADER_H
 #define LOADER_H
 
-// Global arrays
-extern float train_data[NUM_TRAIN][SIZE];
-extern float train_label[NUM_TRAIN][CLASSES];   // one-hot
-extern float test_data[NUM_TEST][SIZE];
-extern float test_label[NUM_TEST][CLASSES];     // one-hot
-
 // Helper: read big-endian 32-bit int
-void load_data(const char *filename, float data[][SIZE], int num); 
-void load_labels(const char *filename, float labels[][CLASSES], int num);
-void load_dataset();
+void load_data_train(const char *filename, float* train_data, int num); 
+void load_labels_train(const char *filename, float* train_labels, int num);
+void load_dataset_train(float* train_data, float* train_label);
 
+void load_data_predict(const char *filename, float* predict_data, int num); 
+void load_labels_predict(const char *filename, float* predict_labels, int num);
+void load_dataset_predict(float* train_data, float* train_label);
 #endif

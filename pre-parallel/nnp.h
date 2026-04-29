@@ -18,16 +18,16 @@ typedef struct tagMODEL{
     float b3[CLASSES];
 } MODEL;
 
-// Activation function and derivative
-float relu(float x);
-float drelu(float y);
-
 //function prototypes
-void softmax(float *z, float *out, int len);
+//nnp.cu specfic functions. There is a version in kernel and one here
+void softmax_nnp(float *z, float *out, int len);
+float relu_nnp(float x);
+float drelu_nnp(float y);
+
 void init_weights(float *w, int size);
-void train_model(MODEL* model);
+void train_model(MODEL* model, float* train_data, float* train_label);
 void save_model(MODEL* model);
 void load_model(MODEL* model);
-void predict(float *x, MODEL* model);
+void predict(float *x, int i, MODEL* model);
 
 #endif

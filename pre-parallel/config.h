@@ -24,7 +24,7 @@
 #define CLASSES 10  // number of output classes
 #define H1    256     // hidden layer 1
 #define H2    128     // hidden layer 2
-#define EPOCHS 5    // number of training epochs
+#define EPOCHS 1    // number of training epochs, 1 for testing
 #define BATCH  64   // mini-batch size
 
 // Training parameters
