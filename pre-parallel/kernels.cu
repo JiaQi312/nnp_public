@@ -66,6 +66,7 @@ __global__
 void train_model_parallel (MODEL* model, float* train_data, float* train_label, float* loss_array) {
     // calculate which thread this is, only a part of these threads will run the function
     int n = blockIdx.x * blockDim.x + threadIdx.x;
+    printf("thread index: %d\n", n);
 
     if (n < NUM_TRAIN) {
 
