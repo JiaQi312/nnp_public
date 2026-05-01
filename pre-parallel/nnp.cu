@@ -70,14 +70,24 @@ void train_model(MODEL* model, float* train_data, float* train_label){
 
     float *loss_array;
     float loss_sum;
-    cudaMallocManaged(&loss_array, sizeof(float) * 59); // 59 = # of blocks
+    cudaError_t err = cudaMallocManaged(&loss_array, sizeof(float) * 59); // 59 = # of blocks
+    if (err != cudaSuccess) {
+    	printf("CUDA error: %s\n", cudaGetErrorString(err));
+	}
 
     for (int epoch=0; epoch<EPOCHS; epoch++) {
         loss_sum = 0; // loss_array stays accross epoch, so the sum needs to zero out each time
 
         // call the parallel training function
         train_model_parallel<<<59, 1024>>>(model, train_data, train_label, loss_array);
-        cudaDeviceSynchronize();
+
+        // Catch synchronous errors (e.g., invalid launch parameters)
+        cudaError_t syncErr = cudaGetLastError();
+        if (syncErr != cudaSuccess) printf("Sync error: %s\n", cudaGetErrorString(syncErr));
+
+        // Catch asynchronous errors (e.g., out-of-bounds memory access during execution)
+        cudaError_t asyncErr = cudaDeviceSynchronize();
+        if (asyncErr != cudaSuccess) printf("Async error: %s\n", cudaGetErrorString(asyncErr));
 
         //get the total loss for the print
         for (int i = 0; i < 59; i++) {
