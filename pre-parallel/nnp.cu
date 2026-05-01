@@ -70,7 +70,8 @@ void train_model(MODEL* model, float* train_data, float* train_label){
 
     float *loss_array;
     float loss_sum;
-    cudaError_t err = cudaMallocManaged(&loss_array, sizeof(float) * 59); // 59 = # of blocks
+    int block_size = 216;
+    cudaError_t err = cudaMallocManaged(&loss_array, sizeof(float) * block_size); // 216 = # of blocks
     if (err != cudaSuccess) {
     	printf("CUDA error: %s\n", cudaGetErrorString(err));
 	}
@@ -90,7 +91,7 @@ void train_model(MODEL* model, float* train_data, float* train_label){
         if (asyncErr != cudaSuccess) printf("Async error: %s\n", cudaGetErrorString(asyncErr));
 
         //get the total loss for the print
-        for (int i = 0; i < 59; i++) {
+        for (int i = 0; i < block_size; i++) {
             loss_sum += loss_array[i];
         }
 

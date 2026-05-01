@@ -66,12 +66,12 @@ __global__
 void train_model_parallel (MODEL* model, float* train_data, float* train_label, float* loss_array) {
     // calculate which thread this is, only a part of these threads will run the function
     int n = blockIdx.x * blockDim.x + threadIdx.x;
-    printf("thread index: %d\n", n);
+    // printf("thread index: %d\n", n);
 
     if (n < NUM_TRAIN) {
 
         // array to store loss values from same thread block
-        __shared__ float shared_loss[1024];
+        __shared__ float shared_loss[256];
 
         // ---------- Forward ----------
         float h1[H1], h1a[H1];
@@ -95,10 +95,10 @@ void train_model_parallel (MODEL* model, float* train_data, float* train_label, 
 
         // ---------- Loss ----------
         // initalize shared_loss array to first class
-        shared_loss[n] = train_label[n * CLASSES + 0]*logf(outa[0]+1e-8f);
+        shared_loss[threadIdx.x] = train_label[n * CLASSES + 0]*logf(outa[0]+1e-8f);
         // now sum the losses
         for (int k=1;k<CLASSES;k++)
-            shared_loss[n] -= train_label[n * CLASSES + k]*logf(outa[k]+1e-8f);
+            shared_loss[threadIdx.x] -= train_label[n * CLASSES + k]*logf(outa[k]+1e-8f);
         __syncthreads();
 
         // store sum of array in here, but only return the one in thread 0
