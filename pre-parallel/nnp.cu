@@ -79,7 +79,7 @@ void train_model(MODEL* model, float* train_data, float* train_label){
         loss_sum = 0; // loss_array stays accross epoch, so the sum needs to zero out each time
 
         // call the parallel training function, moving to smaller thread sizes due to having too much register use
-        train_model_parallel<<<432, 128>>>(model, train_data, train_label, loss_array);
+        train_model_parallel<<<216, 256>>>(model, train_data, train_label, loss_array);
 
         // Catch synchronous errors (e.g., invalid launch parameters)
         cudaError_t syncErr = cudaGetLastError();
