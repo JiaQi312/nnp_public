@@ -6,7 +6,7 @@
  *  Placeholder Header file for CUDA kernel functions
 */
 
-#include <cuda.h>
+#include <cuda_runtime.h>
 
 // Kernel function prototypes
 //__global__ void test_kernel();

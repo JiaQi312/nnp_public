@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include <cuda.h>
+#include <cuda_runtime.h>
 #include "config.h"
 #include "loader.h"
 #include "nnp.h"
